@@ -1,0 +1,88 @@
+export default [
+  {
+    id:"11", title:"DB 확장", goal:"같은 SolidStart 게시판을 PostgreSQL, MariaDB, MongoDB에 연결하고 저장소 설정 차이를 검증한다.",
+    theory:["Store는 SolidStart 서비스에 동일한 list/insert/update/remove 계약을 준다. 콘센트와 기기 사이에 어댑터를 바꾸듯 UI와 HTTP 경로를 유지하고 드라이버를 바꾼다.","SQL에서는 Knex 스키마와 쿼리 빌더를 사용한다. PostgreSQL은 pg 드라이버와 RETURNING, MariaDB는 mysql2 드라이버와 생성 ID를 사용한다. SQLite는 better-sqlite3와 로컬 파일을 쓴다. MongoDB는 공식 드라이버, 컬렉션·인덱스, 원자적 숫자 카운터를 쓴다.","ORM 설계에서 관계형 모델은 스키마 마이그레이션·FK·JOIN을 적용하는 위치가 핵심이고 MongoDB의 모델은 문서 임베딩 또는 참조와 인덱스가 기준이다. 이 실습은 JSON payload를 공유하며 owner/parent는 검색 가능한 필드로 두고 스키마 차이를 어댑터에 모은다."],
+    steps:["SQLite 기본 경로로 npm run test:db를 실행한다.","PostgreSQL은 Docker Compose 기본 db 서비스, DB_CLIENT=pg와 DATABASE_URL=postgresql://board:board@db:5432/board를 사용한다. 호스트 실행에서 DB에 접근하려면 포트를 의도적으로 게시하고 db 대신 localhost를 쓴다.","docker compose --profile drivers up -d mariadb mongo를 실행한다. MariaDB는 DB_CLIENT=mysql2 및 DATABASE_URL=mysql://board:board@127.0.0.1:33316/board, MongoDB는 DB_CLIENT=mongo, MONGODB_URL=mongodb://127.0.0.1:33317, MONGODB_DB=solidstart를 설정한다.","각 설정에서 npm run test:db로 CRUD를 확인한다. 기존 데이터가 있으면 원본 백업·읽기 전용 전환·ID 및 owner/parent를 보존한 이관·행 수와 소유권 검증을 순서대로 수행한다. 설정 변경의 기본예제는 새 DB에서 시작한다."],
+    files:[{path:"scripts/check-db.mjs",lines:["1|Node 단언과 충돌 방지용 무작위 식별자를 가져온다.","3|환경 변수와 선택된 DB Store에 접근한다.","7|DB를 열고 같은 게시판 서비스에 주입한다.","13|격리된 데이터로 게시글을 등록한다.","17|검색·댓글·부분 수정·삭제 결과를 검증한다.","24|테스트가 만든 데이터만 정리하고 연결을 닫는다."]}],
+    links:["서비스와 API 계약을 고정했으므로 study12의 UI와 study18의 문서 저장도 DB 교체 뒤 같은 경로를 사용한다.","ORM으로 확장하는 경우 PostgreSQL용 Drizzle은 drizzle-orm/node-postgres, pgTable, Drizzle Kit의 dialect=postgresql을 조합한다. MariaDB 접속은 mysql2와 MySQL 방언을 사용하며 실제 MariaDB 버전에서 생성된 마이그레이션을 먼저 검증한다. 스키마에는 mysqlTable, 설정에는 dialect=mysql을 둔다. MongoDB에서 Mongoose를 사용하면 mongoose.connect(MONGODB_URL, { dbName })으로 연결하고 new Schema()로 문서를 정의한다. 인덱스와 참조 필드는 스키마에서 관리한다.","로컬 Mongo 예제는 테스트용 단일 노드를 사용한다. 운영에서 다중 리소스를 한 번에 바꾸는 기능이 늘면 트랜잭션 가능한 배치와 복제 구성을 설계한다."],
+    errors:[["ECONNREFUSED","컨테이너 준비 전이거나 호스트 이름이 틀림","docker compose ps와 DB 포트를 확인한다."],["Mongo 로그인 또는 서버 선택 실패","URL, 인증 DB 또는 접근 설정 불일치","MONGODB_URL과 MONGODB_DB를 확인한다."],["DB 바꾼 뒤 예전 글이 없음","대상은 새 데이터 저장소","기존 자료가 필요하면 이관 절차 후 원본과 대상의 수와 ID를 대조한다."]],
+    practice:["세 드라이버에서 같은 테스트를 실행하고 차이가 생기는 설정을 적는다.","정상 연결을 끊고 /ready의 503을 재현한다."],
+    checks:["PostgreSQL·MariaDB·MongoDB 설정과 CRUD 확인","SQL 생성 ID와 MongoDB 카운터 차이 이해","이관 전에 원본과 복원 절차 확인"],
+    refs:[["Knex 지원 클라이언트","https://knexjs.org/guide/"],["MongoDB Node 드라이버","https://www.mongodb.com/docs/drivers/node/current/"],["Drizzle PostgreSQL","https://orm.drizzle.team/docs/get-started-postgresql"],["Drizzle MySQL","https://orm.drizzle.team/docs/get-started/mysql-new"],["Mongoose 스키마","https://mongoosejs.com/docs/guide.html"]]
+  },
+  {
+    id:"12", title:"프론트 UI와 상태·폼 연동", goal:"Kobalte, Solid Store, Modular Forms를 사용해 문서 작업실 입력과 상태를 연결한다.",
+    theory:["Kobalte의 Switch는 키보드 조작과 라벨 같은 접근성을 제공하고 모양은 스타일에서 정한다. Modular Forms는 필드 오류를 제공하며 최종 검증은 API가 담당한다.","createStore는 선택 문서, 제출 상태, 결과, 질문 기록을 하나의 모델로 묶는다. 작업일지의 각 칸만 업데이트하듯 변경 경로만 갱신한다."],
+    steps:["로그인하고 /workbench에서 TXT/MD를 업로드해 문서를 선택한다.","요약 스위치를 Space로 바꾸고 비어 있는 질문을 전송해 필드 오류를 확인한다.","유효한 질문을 전송하고 대기 중 버튼이 비활성화되고 결과와 기록이 바뀌는지 확인한다."],
+    files:[{path:"tsx_version/src/components/QuestionForm.tsx",lines:["1|Kobalte의 접근 가능한 스위치를 사용한다.","2|Modular Forms의 폼 구성과 검증을 가져온다.","7|폼에서 제출 핸들러와 필드를 꺼낸다.","8|요약 여부는 별도 signal로 관리한다.","10|전송할 때 요약이면 질문 앞에 표시를 붙인다.","11|스위치의 접근 가능한 입력과 라벨을 연결한다.","16|빈 값과 최대 길이를 제출 전에 검사한다.","19|입력과 오류 메시지를 ARIA 속성으로 연결한다.","24|서버가 응답하는 동안 제출 버튼을 비활성화한다."]},{path:"tsx_version/src/features/workspace-state.ts",lines:["1|객체 구조를 반응형으로 추적하는 createStore를 가져온다.","3|문서와 질문 결과 모양을 정한다.","6|선택 문서·입력 대기·응답·오류의 초기 상태를 선언한다."]}],
+    links:["Switch는 프롬프트 의도를 전달하고 실제 질문 API와 SSE 처리는 study18에서 다룬다.","쓰기 pending과 폼 검증, 텍스트 렌더링의 경계를 유지한다."],
+    errors:[["라벨 클릭으로 스위치가 이동하지 않음","스위치 입력 또는 라벨 구조 누락","Switch.Input·Control·Label 구성과 Tab/Space를 확인한다."],["문서 전환 뒤 이전 기록이 표시됨","느린 이전 응답이 새 선택 상태를 덮음","요청 번호를 비교해 최신 응답만 적용한다."]],
+    practice:["마우스 없이 문서를 골라 질문을 제출한다.","395자와 396자 입력을 시도해 UI와 API 제한 관계를 적는다."],
+    checks:["Kobalte 위젯과 키보드 점검","Solid Store로 목록·선택·결과 관리","Modular Forms 오류와 API 검증 확인"],
+    refs:[["Kobalte Switch","https://kobalte.dev/docs/core/components/switch/"],["Modular Forms Solid","https://modularforms.dev/solid/guides/create-your-form"]]
+  },
+  {
+    id:"13", title:"외부 서비스 연동", goal:"결제·메일·문서 파일·GitHub OAuth를 SolidStart 서버의 경계에서 연결한다.",
+    theory:["Stripe Checkout에는 서버가 가격 ID를 전달하고 결제 상태는 서명된 webhook으로 확인한다. 문에 붙은 성공 알림과 영수증이 다르듯 리디렉션 결과만으로 결제를 확정하지 않는다.","메일은 인증된 계정의 주소로만 예약하고 SMTP 서버로 백그라운드 전송한다. 파일은 확장자, MIME, 실제 바이트와 UTF-8을 검사하고 소유자별로 저장한다.","OAuth는 state로 로그인 시작과 콜백을 묶고 PKCE로 인가 코드를 보호한다. GitHub 사용자 ID로 연동하며 확인된 이메일을 읽고 앱 세션을 새로 만든다."],
+    steps:[".env의 STRIPE_SECRET_KEY, STRIPE_PRICE_ID, STRIPE_WEBHOOK_SECRET에 테스트 모드 값을 넣는다. Stripe CLI로 stripe listen --forward-to localhost:3000/api/integrations/stripe-webhook을 실행한다. /workbench에서 테스트 Checkout을 누르고 해당 사용자 결제 이벤트를 확인한다.","docker compose --profile mail up -d mailpit을 실행한다. 호스트의 앱에서 SMTP_URL=smtp://localhost:1025, MAIL_FROM=board@example.test로 설정하고 작업실의 내게 메일 버튼을 누른 뒤 http://localhost:8025에서 확인한다.","/workbench에서 UTF-8 TXT/MD를 올린다. /api/documents POST의 Content-Type은 text/plain, X-Filename은 URL 인코딩 파일명이다. 최대 64 KiB다.","GitHub OAuth App의 callback을 http://localhost:3000/api/oauth/github/callback으로 등록하고 GITHUB_CLIENT_ID와 GITHUB_CLIENT_SECRET을 서버에 둔다. /account 링크로 로그인한다."],
+    files:[{path:"tsx_version/src/routes/api/integrations/[operation].ts",lines:["1|들어오는 요청 타입을 지정한다.","2|사용자별 작업을 인증하도록 한다.","4|서버에서만 쓰는 결제와 메일 기능을 가져온다.","7|Stripe webhook은 사용자 세션 대신 자체 서명을 검사한다.","11|일반 작업은 앱 로그인 사용자만 호출할 수 있다.","12|메일을 큐에 추가하고 아직 발송 전임을 202로 알린다.","16|멱등 키로 Checkout을 시작하고 이동 주소를 반환한다.","20|지원하지 않는 이름은 공통 오류를 반환한다."]}],
+    links:["SMTP 발송 작업은 study15에서 재시도와 크래시 복구를 확인한다.","파일 원문은 study18의 문서 발췌와 질문 이력에서 사용한다. OAuth 로그인도 일반 /api/auth/me 세션으로 이어진다."],
+    errors:[["503 SERVICE_UNAVAILABLE","외부 서비스 환경 변수가 비어 있음","각 작업에 요구되는 서버 설정 이름을 확인한다."],["400 webhook","서명 비밀이 다른 리스너용이거나 원본 본문이 변경됨","CLI가 표시한 secret과 원본 바이트를 사용한다."],["403 OAuth 콜백","state 쿠키 없음·만료·불일치","같은 호스트에서 로그인을 다시 시작하고 callback 주소를 확인한다."]],
+    practice:["Mailpit에서 메일 제목과 수신 주소를 확인한다.","같은 Stripe idempotencyKey를 두 번 보내 Checkout 주소가 같은지 테스트 모드로 확인한다.","허용 크기를 초과한 파일과 지원하지 않는 파일을 업로드해 413·400 응답을 본다."],
+    checks:["Stripe 테스트 결제·raw body 서명·멱등 처리 확인","SMTP 예약과 Mailpit 수신 확인","파일 검증과 OAuth state·PKCE 확인"],
+    refs:[["Stripe Checkout","https://docs.stripe.com/payments/checkout"],["Stripe webhook 서명","https://docs.stripe.com/webhooks/signature"],["GitHub OAuth 승인","https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps"]]
+  },
+  {
+    id:"14", title:"REST API 설계와 OpenAPI", goal:"공통 v1 경로·검색·페이지네이션·오류 계약을 OpenAPI와 Swagger UI로 검증한다.",
+    theory:["리소스는 소문자 복수 명사로 표현하고 HTTP 메소드가 동작을 표현한다. 책 번호는 자원, 요청 메소드는 대출·수정·삭제의 구분에 해당한다.","v1은 공통 규약의 버전이며 현재 경로는 /api다. OpenAPI info.version=1.0.0을 사용한다. 호환되지 않는 계약이 필요하면 새 경로(예: /api/v2)와 별도 문서를 유지한다.","검색 q는 제목·본문에서 대소문자를 무시한다. page는 1부터, limit 기본 10 및 최대 50이고 정렬은 createdAt, -createdAt, -commentCount다. 오류는 error.code/message/fields/requestId로 연결한다."],
+    steps:["/api-docs의 Swagger UI와 /api/docs/openapi의 OpenAPI 3 JSON을 연다. Swagger UI 자산에는 CDN 접근이 필요하다.","GET /api/posts를 q와 limit으로 호출하고 성공 단건·목록·204 제거의 스키마를 확인한다.","테스트 계정 토큰으로 Bearer Authorize를 설정하고 POST의 201·Location, 잘못된 본문의 400·fields, 권한 없는 요청의 403을 확인한다."],
+    files:[{path:"tsx_version/src/routes/api/docs/openapi.ts",lines:["1|SolidStart APIEvent를 가져온다.","2|공통 응답 헤더와 JSON 프레임을 사용한다.","3|게시판 계약의 전체 OpenAPI 스키마 객체를 불러온다.","5|GET에 JSON 문서 응답을 연결한다."]},{path:"tsx_version/src/routes/api-docs.ts",lines:["1|한국어 HTML 문서와 제목을 정의한다.","2|Swagger UI CSS 버전을 고정한다.","4|문서 자산을 로드한다.","5|앱의 OpenAPI URL과 렌더링 위치를 지정한다.","7|HTML과 올바른 Content-Type, nosniff를 반환한다."]}],
+    links:["공통 스펙의 오류 헤더·본문 requestId를 서버 로그와 맞춘다.","문서 작업실 전용 엔드포인트는 study13·18의 실습 문서에서 관리한다."],
+    errors:[["Swagger 화면이 빈 채로 나옴","CDN 자산을 차단함","/api/docs/openapi의 JSON을 직접 열고 DevTools의 CDN 요청을 확인한다."],["204를 JSON으로 읽지 못함","204에는 본문이 없음","성공 상태에 따라 파싱을 건너뛴다."]],
+    practice:["OpenAPI에 정의된 필드 목록과 실서버 요청 두 개를 비교한다.","401과 403의 실제 응답에 같은 요청 ID 헤더 동작이 적용되는지 확인한다."],
+    checks:["OpenAPI 경로·모델·보안 스키마 확인","q·page·limit·sort와 meta 검증","버전 유지 원칙과 204·오류 응답 확인"],
+    refs:[["공통 API 스펙 v1","https://app.notion.com/p/3d6d7dec5e2e8139adbfd36dd506c65e"],["OpenAPI 3.0.3","https://spec.openapis.org/oas/v3.0.3"]]
+  },
+  {
+    id:"15", title:"성능, 캐시와 비동기 작업", goal:"목록 캐시와 메일 작업 큐를 실습하고 실제 응답 지연을 측정한다.",
+    theory:["5초 TTL 캐시는 검색 결과를 잠시 맡기는 보관함과 같다. 서버에서 정규화한 쿼리를 키로 쓰고 게시글과 댓글 변경 뒤 전체 목록 캐시를 지운다.","같은 키에 진행 중인 Promise를 공유해 동시 조회를 줄이고, 오류 Promise는 제거해 다시 시도할 수 있게 한다. 사용자별 세션·파일 응답은 공개 캐시에 저장하지 않는다.","메일 작업은 먼저 DB에 넣고 별도 타이머가 4초마다 가져온다. 저장된 상태를 바탕으로 작업을 점유하고 시간이 지난 작업을 회수한다. SMTP 전송 후 저장 전에 죽을 경우 중복 가능성이 있으므로 동일 Message-ID를 쓰고 운영에서는 수신 측 멱등을 같이 설계한다."],
+    steps:["실행 중인 서버에서 node scripts/measure.mjs를 실행해 /health와 /api/posts의 p50·p95를 기록한다. BASE_URL을 바꿔 대상 서버를 지정할 수 있다.","캐시 TTL이나 검색 패턴을 바꾸고 같은 DB와 요청 수에서 다시 잰다. SSR·네트워크는 DevTools, 서버 시간은 LOG_REQUESTS=true로 비교한다.","Mailpit을 중단한 상태로 메일을 예약하고 다시 켜서 발송 또는 실패 상태의 전이를 확인한다."],
+    files:[{path:"tsx_version/src/server/cache.ts",lines:["1|TTL·용량·시간 함수를 받아 캐시를 만든다.","2|키마다 만료 시각과 진행 중인 Promise를 저장한다.","4|변경 뒤 사용하는 전체 무효화다.","9|만료되지 않은 항목은 같은 Promise를 반환한다.","12|용량을 넘기기 전에 가장 먼저 들어온 항목을 뺀다.","16|당장 조회하지 않고 Promise에 로더를 붙인다.","18|실패한 Promise가 아직 같은 캐시 항목이면 제거한다.","24|호출자에게 조회·무효화 API를 돌려준다."]},{path:"tsx_version/server/plugins/mail.ts",lines:["1|Nitro 시작에 실행할 플러그인을 정의한다.","6|한 프로세스에서 진행 중인 배치가 있으면 새 배치를 시작하지 않는다.","9|작업 오류는 구조화해 남기고 다음 틱에 다시 실행할 수 있게 한다.","13|서버 종료 때 타이머를 닫고 남은 작업과 DB 연결을 정리한다."]}],
+    links:["study17의 웹소켓도 같은 Node 프로세스에서 변경 알림을 보낸다. 여러 인스턴스로 확장할 때 Redis 같은 공유 캐시·메시지 브로커를 고려한다.","샘플 게시판은 작은 데이터 세트를 메모리에서 필터링한다. 데이터가 커지면 DB에서 인덱스·페이지네이션과 집계를 적용한 뒤 다시 측정한다."],
+    errors:[["목록이 잠시 이전 데이터","캐시 무효화가 다른 프로세스에 전파되지 않음","단일 인스턴스에서 재현하고 다중 인스턴스에는 공유 무효화를 설계한다."],["작업이 계속 queued 또는 failed","SMTP 설정 누락 또는 접속 실패","로그·Mailpit 연결과 작업 재시도 시각을 확인한다."]],
+    practice:["검색 키를 바꾸며 캐시 단위 테스트에 새 입력을 추가한다.","40회 요청의 p50과 p95를 기록하고 조건을 함께 적는다."],
+    checks:["TTL·용량·오류·무효화 동작 확인","메일 작업 점유와 재시도 실습","측정 조건과 p50·p95 기록"]
+  },
+  {
+    id:"16", title:"운영, Docker와 CI/CD", goal:"Docker 이미지, GitHub Actions, 관측과 복원 점검을 운영 체크리스트로 실행한다.",
+    theory:["Dockerfile은 같은 빌드 레시피로 런타임을 만드는 조리법이다. 빌드 단계에 설치·컴파일을 두고 최종 단계는 비루트 사용자로 실행한다.","CI는 두 버전 타입/테스트/빌드와 문서 검사를 수행한다. 검증된 기본 브랜치 이미지는 GHCR에 커밋 SHA 태그로 올리고 수동 워크플로 실행에서 검증된 이미지를 스테이징에 설치한다.","/health는 프로세스, /ready는 DB 접근, 구조화 로그는 요청 ID·경로·지연·응답 상태를 기록한다. 백업은 복원 연습까지 해야 대체 가능한 데이터를 만들 수 있다."],
+    steps:["운영용 별도 .env에서 DB_CLIENT=pg를 선택하고 DATABASE_URL을 Compose의 db 서비스와 같게 정한다. 실제 운영 비밀번호와 비밀은 서버 또는 GitHub Environment에 저장한다.","docker compose up --build -d --wait 및 docker compose logs -f app을 실행한다. 호스트 프록시가 TLS를 종료하도록 하고 APP_ORIGIN은 공개 HTTPS URL로 지정한다.","운영 호스트 /opt/solidstart에 배포용 compose.yml과 .env를 준비한다. 필요하면 GHCR 읽기 권한으로 로그인하고 staging 환경에 SSH host/user/key/known_hosts를 등록한다. 워크플로를 수동 실행하고 deploy를 선택한다.","PostgreSQL 백업: 백업 폴더를 준비한 뒤 docker compose exec -T db pg_dump -U board -d board --file=/tmp/board.sql, docker compose cp db:/tmp/board.sql backups/board.sql을 실행한다. 복원 실습은 별도 테스트 DB에서 psql -v ON_ERROR_STOP=1 -d 복원DB -f 덤프파일로 하고 행 수·인증·CRUD를 확인한다. SQLite는 node --env-file-if-exists=.env scripts/backup-sqlite.mjs를 실행한다.","롤백은 이전 커밋 SHA 이미지의 SOLIDSTART_IMAGE를 선택하고 compose pull/up --no-build --wait로 재배포한다. 스키마 변경이 있다면 앱 롤백과 DB 복원을 함께 검증한다."],
+    files:[{path:"Dockerfile",lines:["1|Node 24 빌드 스테이지와 작업 경로를 정한다.","3|잠금 파일로 의존성을 재현 가능하게 설치한다.","5|소스를 가져와 빌드하고 개발 패키지를 정리한다.","8|실행 이미지에는 운영 환경과 주소를 기본값으로 선언한다.","11|운영 모듈과 빌드 결과를 비루트 사용자 소유로 복사한다.","13|SQLite 데이터 볼륨에 쓸 수 있는 경로를 준비한다.","15|준비 상태를 정기 검사한다.","16|Nitro HTTP 엔트리를 시작한다."]}],
+    links:["HTTP 백업·로그 점검은 studyFinal의 출시 기준으로 사용한다.","GitHub Actions 환경 설정과 실행 절차는 워크플로 정의의 verify, image, deploy를 함께 확인한다."],
+    errors:[["컨테이너 health unhealthy","DB 주소 또는 환경 변수 불일치","compose ps와 app/db 로그에서 /ready 실패 원인을 확인한다."],["배포 직전 SSH host 오류","known_hosts에 제공된 호스트 키가 실제 호스트와 다름","신뢰할 수 있는 경로에서 키를 확인하고 GitHub Environment에 넣는다."],["DB 백업 용량이 0","리다이렉션 또는 백업 명령 실패","덤프 생성 종료 코드·파일 크기 확인 후 새 DB 복원으로 검증한다."]],
+    practice:["로컬 Compose 서비스를 재시작하고 작성한 글이 남아 있는지 확인한다.","SQLite 백업에서 integrity_check가 통과하는지 보고 임시 경로에서 서버를 실행한다.","이미지 태그 두 개로 staging 롤백을 연습한다."],
+    checks:["Docker 비루트 실행 및 /ready 통과","CI에서 두 버전 빌드·HTTP 검사","운영 환경의 비밀·SSH·HTTPS 설정","백업 파일과 별도 DB 복원 확인"]
+  },
+  {
+    id:"17", title:"WebSocket과 파일 처리", goal:"Nitro WebSocket으로 공개 게시판 변경을 알리고 파일 업로드의 한도와 인증을 확인한다.",
+    theory:["WebSocket은 연결을 유지하는 통화처럼 서버가 변경을 바로 알릴 수 있다. 브라우저는 wss 또는 ws로 연결하고 서버는 변경 종류만 전달한다.","알림이 오면 라우터의 목록·상세 키를 revalidate한다. 구독은 연결 종료에 정리하고 허용 Origin에서만 연결한다.","업로드는 본문 전체를 받기 전에 Content-Length를 보고, 스트리밍 도중에도 실제 바이트를 센다. 문서는 공개 알림에 넣지 않고 인증된 소유자가 서버에서만 찾는다."],
+    steps:["/posts를 탭 두 개에서 열고 DevTools Network의 WS 항목을 확인한다.","한 탭에서 새 글·댓글을 등록하고 다른 탭의 알림과 목록 갱신을 확인한다.","/workbench에서 64 KiB 이하 파일을 올린 뒤 더 큰 파일을 보낸다. 413과 저장 거부를 확인한다."],
+    files:[{path:"tsx_version/server/routes/ws.ts",lines:["1|Nitro WebSocket 핸들러를 불러온다.","2|같은 프로세스 안의 변경 구독을 연결한다.","5|소켓 ID별 정리 함수를 저장한다.","7|종료 때 해당 구독을 제거한다.","12|브라우저 요청 Origin을 운영 주소와 대조한다.","15|최대 연결 수에 도달하면 종료한다.","19|각 소켓에서 서버가 전달한 변경 종류를 보낸다.","22|연결 종료와 오류에서 구독을 해제한다."]},{path:"tsx_version/src/components/LiveStatus.tsx",lines:["1|브라우저 생명주기 훅과 상태를 사용한다.","8|마운트된 브라우저에서만 소켓을 연다.","10|현재 페이지 프로토콜을 ws 또는 wss로 연결한다.","13|글 변경 이벤트를 받고 화면 상태를 바꾼다.","16|라우터 조회를 새로 실행한다.","20|화면이 사라지면 소켓을 닫는다."]}],
+    links:["파일 처리 결과는 study18의 문서 검색과 Q&A 입력으로 쓰인다.","운영 프록시에서 WebSocket 업그레이드를 전달한다. 여러 인스턴스가 필요하면 인스턴스 간 이벤트를 공유하도록 변경한다."],
+    errors:[["WebSocket 403","현재 브라우저 Origin이 APP_ORIGIN과 다름","정확한 호스트·포트와 HTTPS 주소를 맞춘다."],["연결은 되지만 알림이 안 옴","두 탭의 요청이 다른 프로세스로 감","단일 인스턴스 또는 공유 이벤트 경로를 점검한다."],["413 파일 요청","헤더 또는 실제 본문이 한도를 넘음","텍스트를 작게 나눠 업로드한다."]],
+    practice:["DevTools에서 변경 프레임을 기록하고 저장 응답과 시간 순서를 비교한다.","두 계정으로 같은 문서 ID의 조회나 질문을 시도해 한 계정만 접근하는지 확인한다."],
+    checks:["WebSocket 연결·변경 발표·구독 해제 확인","파일 크기 제한과 소유자 접근 확인","프록시 Upgrade 및 wss 점검"],
+    refs:[["SolidStart v2 WebSocket","https://docs.solidjs.com/solid-start/v2/advanced/websocket"]]
+  },
+  {
+    id:"18", title:"AI 모델과 MCP", goal:"DocuForge의 문서 요약·근거 Q&A를 SolidStart 안에서 만들고 스트리밍과 MCP를 연결한다.",
+    theory:["DocuForge 학습 목표는 문서 업로드, 발췌 선택, 요약과 질문, 근거 표시와 이력 저장이다. 자료를 분류한 뒤 관련 쪽을 펼쳐 놓고 답을 작성하는 방식과 비슷하다.","TXT·MD를 UTF-8로 받고 800자 청크 중 질의 단어를 포함한 일부를 고른다. 시스템 프롬프트는 한국어 답변·근거 번호·발췌 속 지시 무시를 요구한다. 프롬프트에는 크기 제한이 있고 도구 권한으로 승격하지 않는다.","모델은 환경 설정으로 결정한다. mock은 발췌를 구간별로 반환하고 Anthropic은 Messages API, Ollama는 /api/chat에서 스트림을 읽는다. 앱 인증과 모델 API 키를 분리한다.","SSE는 UTF-8 프레임 단위 응답이며 POST에서 fetch와 ReadableStream으로 읽는다. 요청/응답 토큰 초과를 줄이기 위해 UTC 하루 예산을 원자적으로 예약하고 성공한 응답에 실제 사용량을 기록한다.","MCP Host는 AI 도구를 실행하는 앱, Client는 통신 세션, Server는 공개 글 검색을 도구로 제공하는 프로세스다. 로컬 stdio와 서버 /mcp의 Streamable HTTP는 같은 search_posts를 사용한다."],
+    steps:["AI_PROVIDER=mock으로 로그인하고 /workbench에서 작은 텍스트를 올린 뒤 질문한다. 발췌 번호, 여러 SSE 프레임과 질문 기록을 확인한다.","외부 모델은 AI_PROVIDER=anthropic, AI_MODEL 및 ANTHROPIC_API_KEY를 서버에서 설정한다. 로컬 Ollama는 모델을 내려받은 뒤 AI_PROVIDER=ollama, OLLAMA_URL과 AI_MODEL을 지정한다.","node --env-file-if-exists=.env scripts/mcp-client.mjs SolidStart로 stdio의 listTools와 callTool을 확인한다. HTTP에서는 임의로 생성한 MCP_TOKEN을 .env에 넣고 서버를 실행한 뒤 같은 명령에 --http SolidStart를 전달한다.","다른 MCP 호스트에는 실행 폴더를 저장소로 지정한 stdio 명령을 연결하거나, TLS가 적용된 /mcp 주소와 별도 Bearer 토큰을 설정한다."],
+    files:[{path:"tsx_version/src/features/stream.ts",lines:["1|일반 JSON API의 data와 오류 응답을 읽는다.","9|질문 API가 4xx/5xx일 때 SSE로 파싱하지 않는다.","12|바이트 스트림을 UTF-8 문자열로 변환한다.","15|전송 프레임의 끝을 기준으로 모아 불완전한 구간을 보관한다.","21|data 프레임의 JSON과 오류·완료·텍스트를 처리한다.","28|연결이 끝나거나 소비가 취소되면 reader를 해제한다."]},{path:"scripts/mcp-client.mjs",lines:["1|SDK의 클라이언트와 두 전송 구현을 가져온다.","5|실행 옵션과 검색어를 판별한다.","7|서버 환경의 토큰으로 원격 HTTP 전송을 구성한다.","11|로컬 실행은 Node 자식 프로세스와 필요한 환경만 넘긴다.","15|클라이언트 이름과 버전을 선언한다.","18|프로토콜 핸드셰이크와 도구 목록 조회를 실행한다.","20|search_posts를 호출한다.","22|성공과 실패 모두 연결을 닫는다."]}],
+    links:["문서 작업실 데이터는 소유자 세션으로 보호한다. MCP 도구는 공개 게시판 정보만 조회한다.","DocuForge의 근거 번호와 이력 흐름을 실습한다. PDF/DOCX/PPTX 추출, OCR 및 벡터 임베딩은 확장 과제다.","프롬프트를 문서 원문과 분리해도 출력 검증과 접근 제어가 필요하다. 화면은 응답을 안전한 텍스트로 렌더링한다."],
+    errors:[["AI_UNAVAILABLE 프레임","서버 모델 설정 또는 연결·완료가 실패","서버의 provider·모델 이름·환경 변수와 네트워크를 확인한다."],["문자나 JSON이 깨짐","응답 청크가 SSE 프레임과 같은 경계라는 가정","TextDecoderStream 및 빈 줄 경계 버퍼를 사용한다."],["429 AI_QUOTA_EXCEEDED","당일 예약 한도를 사용함","테스트 예산이나 날짜 경계를 확인한다."],["MCP 도구 호출 실패","HTTP 인증 누락 또는 stdio에서 다른 작업 디렉터리 사용","MCP_TOKEN 또는 실행 폴더와 DB 파일 경로를 확인한다."]],
+    practice:["문서에 있는 질문과 없는 질문으로 근거 표시 및 거절 문구를 본다.","AI_DAILY_TOKEN_LIMIT을 낮춰 429 응답을 확인한다.","MCP를 stdio와 HTTP로 각각 호출하고 같은 공개 검색 결과를 확인한다."],
+    checks:["서버에서만 모델·MCP 키를 읽기","발췌 프롬프트, SSE, 취소와 질문 이력 확인","AI 예산과 문서 소유자 권한 확인","MCP 서버·클라이언트로 공개 게시판 검색"],
+    refs:[["Notion AI 모델 연동 · MCP","https://app.notion.com/p/40bd7dec5e2e81b9b11dfe5616516df4"],["Notion DocuForge","https://app.notion.com/p/40bd7dec5e2e818d9c91c6fb26dccc4c"],["MCP TypeScript SDK","https://ts.sdk.modelcontextprotocol.io/server"],["Anthropic 스트리밍","https://platform.claude.com/docs/en/build-with-claude/streaming"]]
+  }
+];
