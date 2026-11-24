@@ -1,0 +1,52 @@
+services:
+  app:
+    image: ${SOLIDSTART_IMAGE:-solidstart-study:local}
+    build: .
+    ports: ["${BIND_HOST:-127.0.0.1}:${APP_PORT:-3000}:3000"]
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      APP_ORIGIN: ${APP_ORIGIN:-http://localhost:3000}
+      DB_CLIENT: ${DB_CLIENT:-pg}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://board:board@db:5432/board}
+      SMTP_URL: ${SMTP_URL:-}
+      MAIL_FROM: ${MAIL_FROM:-}
+      LOG_REQUESTS: "true"
+    volumes: ["app-data:/app/data"]
+    depends_on:
+      db: { condition: service_healthy }
+    restart: unless-stopped
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: board
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-board}
+      POSTGRES_DB: board
+    volumes: ["db-data:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U board -d board"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+    restart: unless-stopped
+  mariadb:
+    image: mariadb:11.4
+    profiles: ["drivers"]
+    environment:
+      MARIADB_ROOT_PASSWORD: board-root-local
+      MARIADB_USER: board
+      MARIADB_PASSWORD: board
+      MARIADB_DATABASE: board
+    ports: ["127.0.0.1:33316:3306"]
+  mongo:
+    image: mongo:8
+    profiles: ["drivers"]
+    ports: ["127.0.0.1:33317:27017"]
+  mailpit:
+    image: axllent/mailpit:latest
+    profiles: ["mail"]
+    ports: ["127.0.0.1:1025:1025", "127.0.0.1:8025:8025"]
+volumes:
+  app-data:
+  db-data:
