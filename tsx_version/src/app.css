@@ -1,0 +1,18 @@
+* { box-sizing: border-box; }
+body { margin: 0; color: #172531; background: #f5f6f2; font: 1rem/1.65 system-ui, sans-serif; }
+header { border-bottom: 1px solid #cad6d2; }
+nav { display: flex; flex-wrap: wrap; gap: 1rem; padding: 1rem 0; }
+nav a[aria-current="page"] { font-weight: 700; }
+a { color: #155d53; }
+h1, h2, h3 { line-height: 1.2; }
+.shell { width: min(56rem, calc(100% - 2rem)); margin: 0 auto; }
+main { padding-block: 1.5rem 4rem; }
+section, article, aside { margin-block: 1rem; padding: 1.25rem; border: 1px solid #cad6d2; background: #fff; border-radius: .5rem; }
+form { display: grid; gap: .65rem; margin-block: 1rem; }
+label { display: grid; gap: .2rem; }
+input, textarea, select, button { font: inherit; padding: .5rem; border: 1px solid #637b77; border-radius: .3rem; }
+button { max-width: fit-content; background: #17493e; color: white; cursor: pointer; }
+button:disabled { opacity: .65; cursor: wait; }
+[role="alert"] { color: #9a292a; }
+:focus-visible { outline: 3px solid #b36913; outline-offset: 2px; }
+pre { white-space: pre-wrap; overflow-wrap: anywhere; }
