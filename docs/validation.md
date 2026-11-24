@@ -10,7 +10,7 @@
 | HTTP 계약 | SSR·보호 라우트·404, 폼 200/400/422, 세션 발급·폐기, 게시글 CRUD, 댓글, 오류 및 요청 ID, CORS·XSS, OpenAPI |
 | DB | SQLite·MariaDB·MongoDB CRUD 스크립트 통과. Docker Compose PostgreSQL에서 Chromium으로 게시판 작성·조회, 문서와 질문 기록 저장 확인 |
 | 브라우저 | Chromium에서 가입 → 로그인 → 글쓰기 action → 다른 탭의 WebSocket 알림 및 목록 갱신 → 문서 업로드 → AI mock 스트림 → 내 이메일 발송 예약 |
-| 운영 | Docker 이미지 빌드, 비루트 컨테이너와 /ready, PostgreSQL 덤프를 새 데이터베이스에서 복원해 게시글 행 수 확인. SQLite 파일의 백업 무결성 검사 |
+| 운영 | Docker 이미지 빌드, 비루트 컨테이너와 /ready, PostgreSQL의 HTTP CRUD 및 덤프 복원 확인. SQLite 파일의 백업 무결성 검사. CI 배포 입력은 커밋 SHA로 구분한 Docker 이미지 아티팩트 |
 | 외부 서비스 | SMTP는 Mailpit 실제 수신 확인. AI는 로컬 mock SSE와 기록, MCP는 stdio 및 인증된 HTTP 호출 확인 |
 | 남은 외부 확인 | Stripe 테스트 계정 결제와 webhook 전달, GitHub OAuth 실제 승인, Anthropic/Ollama 모델 호출, 스테이징 워크플로와 공인 HTTPS |
 

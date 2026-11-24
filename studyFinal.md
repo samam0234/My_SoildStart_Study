@@ -124,7 +124,7 @@ volumes:
    └──── WebSocket ────┤  공개 게시판 변경 알림
                        ├─ Stripe · SMTP · GitHub OAuth
 MCP 클라이언트 ─ /mcp ──┘  공개 게시판 검색
-GitHub Actions ── GHCR 이미지 ── Docker Compose ── HTTPS 프록시
+GitHub Actions ── Docker 이미지 아티팩트 ── Docker Compose ── HTTPS 프록시
 ```
 
 ## ⑤ 오류 노트
