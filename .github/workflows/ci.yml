@@ -17,8 +17,8 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with: { node-version: "24", cache: npm }
       - run: npm ci
       - run: npm run sync:jsx && git diff --exit-code -- jsx_version
@@ -31,25 +31,30 @@ jobs:
     if: github.ref_name == github.event.repository.default_branch && github.event_name != 'pull_request'
     needs: verify
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
     steps:
-      - uses: actions/checkout@v4
-      - name: Publish verified image
-        env:
-          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/checkout@v7
+      - name: Build and archive the verified image
+        shell: bash
         run: |
-          IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}:$GITHUB_SHA"
-          echo "$REGISTRY_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          IMAGE="solidstart-study:$GITHUB_SHA"
           docker build --tag "$IMAGE" .
-          docker push "$IMAGE"
+          docker image save "$IMAGE" | gzip -1 > solidstart-image.tar.gz
+      - uses: actions/upload-artifact@v7
+        with:
+          name: solidstart-image-${{ github.sha }}
+          path: solidstart-image.tar.gz
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
   deploy:
     if: github.event_name == 'workflow_dispatch' && inputs.deploy
     needs: image
     runs-on: ubuntu-latest
     environment: staging
     steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: solidstart-image-${{ github.sha }}
       - name: Deploy image and wait for readiness
         env:
           STAGING_HOST: ${{ secrets.STAGING_HOST }}
@@ -63,11 +68,13 @@ jobs:
           printf '%s\n' "$STAGING_SSH_KEY" > ~/.ssh/id_ed25519
           printf '%s\n' "$STAGING_KNOWN_HOSTS" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
-          IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}:$GITHUB_SHA"
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$STAGING_USER@$STAGING_HOST" sh -s -- "$IMAGE" <<'REMOTE'
+          IMAGE="solidstart-study:$GITHUB_SHA"
+          REMOTE_HOST="$STAGING_USER@$STAGING_HOST"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$REMOTE_HOST" docker image load < solidstart-image.tar.gz
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$REMOTE_HOST" sh -s -- "$IMAGE" <<'REMOTE'
           set -eu
           cd /opt/solidstart
           export SOLIDSTART_IMAGE="$1"
-          docker compose pull app
-          docker compose up -d --no-build --wait
+          docker compose pull db
+          docker compose up -d --no-build --pull never --wait
           REMOTE

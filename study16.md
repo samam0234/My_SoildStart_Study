@@ -7,7 +7,7 @@ Docker 이미지, GitHub Actions, 관측과 복원 점검을 운영 체크리스
 ## ② 📖 이론
 
 - Dockerfile은 같은 빌드 레시피로 런타임을 만드는 조리법이다. 빌드 단계에 설치·컴파일을 두고 최종 단계는 비루트 사용자로 실행한다.
-- CI는 두 버전 타입/테스트/빌드와 문서 검사를 수행한다. 검증된 기본 브랜치 이미지는 GHCR에 커밋 SHA 태그로 올리고 수동 워크플로 실행에서 검증된 이미지를 스테이징에 설치한다.
+- CI는 두 버전의 타입·테스트·빌드와 문서를 검사한다. 기본 브랜치에서 검증된 Docker 이미지를 커밋 SHA 태그의 Actions 아티팩트로 7일간 보관한다. 수동 실행에서 deploy를 선택하면 해당 실행의 아티팩트를 SSH로 보내 스테이징에 설치한다.
 - /health는 프로세스, /ready는 DB 접근, 구조화 로그는 요청 ID·경로·지연·응답 상태를 기록한다. 백업은 복원 연습까지 해야 대체 가능한 데이터를 만들 수 있다.
 
 ## ③ 🛠️ 실기
@@ -16,9 +16,9 @@ Docker 이미지, GitHub Actions, 관측과 복원 점검을 운영 체크리스
 
 1. 운영용 별도 .env에서 DB_CLIENT=pg를 선택하고 DATABASE_URL을 Compose의 db 서비스와 같게 정한다. 실제 운영 비밀번호와 비밀은 서버 또는 GitHub Environment에 저장한다.
 2. docker compose up --build -d --wait 및 docker compose logs -f app을 실행한다. 호스트 프록시가 TLS를 종료하도록 하고 APP_ORIGIN은 공개 HTTPS URL로 지정한다.
-3. 운영 호스트 /opt/solidstart에 배포용 compose.yml과 .env를 준비한다. 필요하면 GHCR 읽기 권한으로 로그인하고 staging 환경에 SSH host/user/key/known_hosts를 등록한다. 워크플로를 수동 실행하고 deploy를 선택한다.
+3. Linux amd64 호스트의 /opt/solidstart에 배포용 compose.yml과 .env를 준비하고 staging 환경에 SSH host/user/key/known_hosts를 등록한다. 기본 브랜치에서 워크플로를 수동 실행하고 deploy를 선택한다. 작업은 압축 이미지를 docker image load에 전달하고 DB 이미지 준비 후 앱의 /ready를 확인한다.
 4. PostgreSQL 백업: 백업 폴더를 준비한 뒤 docker compose exec -T db pg_dump -U board -d board --file=/tmp/board.sql, docker compose cp db:/tmp/board.sql backups/board.sql을 실행한다. 복원 실습은 별도 테스트 DB에서 psql -v ON_ERROR_STOP=1 -d 복원DB -f 덤프파일로 하고 행 수·인증·CRUD를 확인한다. SQLite는 node --env-file-if-exists=.env scripts/backup-sqlite.mjs를 실행한다.
-5. 롤백은 이전 커밋 SHA 이미지의 SOLIDSTART_IMAGE를 선택하고 compose pull/up --no-build --wait로 재배포한다. 스키마 변경이 있다면 앱 롤백과 DB 복원을 함께 검증한다.
+5. 롤백은 호스트에 보관된 이전 SHA 태그 이미지를 SOLIDSTART_IMAGE로 지정하고 docker compose up -d --no-build --pull never --wait를 실행한다. 별도로 아카이브한 이미지가 있다면 먼저 docker image load로 불러온다. 스키마 변경이 있다면 앱 롤백과 DB 복원을 함께 검증한다.
 
 ### 전체 코드 · `Dockerfile`
 
@@ -52,6 +52,104 @@ CMD ["node", "output/server/index.mjs"]
 - 13–14행 · SQLite 데이터 볼륨에 쓸 수 있는 경로를 준비한다.
 - 15행 · 준비 상태를 정기 검사한다.
 - 16–17행 · Nitro HTTP 엔트리를 시작한다.
+
+### 전체 코드 · `.github/workflows/ci.yml`
+
+```yaml
+name: SolidStart checks
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      deploy:
+        description: Deploy the verified image to the configured staging environment
+        type: boolean
+        default: false
+permissions:
+  contents: read
+concurrency:
+  group: solidstart-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with: { node-version: "24", cache: npm }
+      - run: npm ci
+      - run: npm run sync:jsx && git diff --exit-code -- jsx_version
+      - run: npm run check && npm test && npm run verify:study
+      - run: npm run build && npm run build:jsx
+      - run: npm run test:http
+      - run: npm run test:http
+        env: { TEST_BUILD: jsx_version }
+  image:
+    if: github.ref_name == github.event.repository.default_branch && github.event_name != 'pull_request'
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build and archive the verified image
+        shell: bash
+        run: |
+          IMAGE="solidstart-study:$GITHUB_SHA"
+          docker build --tag "$IMAGE" .
+          docker image save "$IMAGE" | gzip -1 > solidstart-image.tar.gz
+      - uses: actions/upload-artifact@v7
+        with:
+          name: solidstart-image-${{ github.sha }}
+          path: solidstart-image.tar.gz
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+  deploy:
+    if: github.event_name == 'workflow_dispatch' && inputs.deploy
+    needs: image
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: solidstart-image-${{ github.sha }}
+      - name: Deploy image and wait for readiness
+        env:
+          STAGING_HOST: ${{ secrets.STAGING_HOST }}
+          STAGING_USER: ${{ secrets.STAGING_USER }}
+          STAGING_SSH_KEY: ${{ secrets.STAGING_SSH_KEY }}
+          STAGING_KNOWN_HOSTS: ${{ secrets.STAGING_KNOWN_HOSTS }}
+        run: |
+          set -eu
+          test -n "$STAGING_HOST" && test -n "$STAGING_USER"
+          install -m 0700 -d ~/.ssh
+          printf '%s\n' "$STAGING_SSH_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$STAGING_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+          IMAGE="solidstart-study:$GITHUB_SHA"
+          REMOTE_HOST="$STAGING_USER@$STAGING_HOST"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$REMOTE_HOST" docker image load < solidstart-image.tar.gz
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$REMOTE_HOST" sh -s -- "$IMAGE" <<'REMOTE'
+          set -eu
+          cd /opt/solidstart
+          export SOLIDSTART_IMAGE="$1"
+          docker compose pull db
+          docker compose up -d --no-build --pull never --wait
+          REMOTE
+```
+
+#### 줄별 설명
+
+- 1–10행 · 푸시와 PR 검증, 스테이징용 수동 실행을 정의한다.
+- 11–16행 · 저장소 읽기 권한과 브랜치별 동시성 제한을 둔다.
+- 17–31행 · 두 버전의 의존성·소스·문서·빌드·HTTP를 검증한다.
+- 32–37행 · 기본 브랜치에서 검증을 통과한 커밋만 빌드한다.
+- 38–42행 · 이미지 태그를 SHA에 고정하고 압축 아카이브를 만든다.
+- 43–49행 · 동일 실행에서 다운로드할 아티팩트를 업로드한다.
+- 50–59행 · 스테이징 입력을 선택한 경우 이미지를 다운로드한다.
+- 60–65행 · 배포 환경의 SSH 접속 비밀을 읽는다.
+- 66–73행 · 공개 호스트 키 검증을 활성화하고 압축 이미지를 전송한다.
+- 74–80행 · 원격 Docker Compose에서 DB와 앱을 시작하고 준비 상태를 기다린다.
 
 ## ④ 🔗 연동 포인트
 
