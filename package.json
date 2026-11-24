@@ -1,0 +1,46 @@
+{
+  "name": "solidstart-study",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "sync:jsx": "node scripts/sync-jsx.mjs",
+    "dev": "node scripts/run-vite.mjs tsx_version dev",
+    "dev:jsx": "node scripts/run-vite.mjs jsx_version dev",
+    "build": "node scripts/run-vite.mjs tsx_version build",
+    "build:jsx": "node scripts/run-vite.mjs jsx_version build",
+    "start": "node --env-file-if-exists=.env tsx_version/.output/server/index.mjs",
+    "check": "tsc -p tsx_version",
+    "test": "node --experimental-strip-types --test tests/unit.test.mjs",
+    "test:http": "node --test tests/http.test.mjs",
+    "test:db": "node --env-file-if-exists=.env scripts/check-db.mjs",
+    "generate:study": "node scripts/generate-study.mjs",
+    "verify:study": "node scripts/verify-study.mjs"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.13.0",
+    "@kobalte/core": "^0.13.11",
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "@modular-forms/solid": "^0.25.1",
+    "@solidjs/router": "^1.0.3",
+    "@solidjs/start": "2.2.3",
+    "better-sqlite3": "^12.6.2",
+    "knex": "^3.1.0",
+    "mongodb": "^7.0.0",
+    "mysql2": "^3.15.0",
+    "nitro": "3.0.261103-rc",
+    "nodemailer": "^10.6.1",
+    "pg": "^8.16.3",
+    "solid-js": "^1.9.14",
+    "stripe": "^20.0.0",
+    "vite": "^8.0.0",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/nodemailer": "^7.0.0",
+    "typescript": "^5.9.3"
+  }
+}
